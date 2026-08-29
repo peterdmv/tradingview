@@ -1,0 +1,70 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © peterdmv
+//
+// Recreation of Webby's RSI Beta v5.150 (Mike Webster's Really Simple Indicator). Reimplemented for educational purposes.
+//
+// Release: v1
+
+//@version=6
+indicator(title="Webby RSI", shorttitle="Webby RSI", format=format.price, precision=2)
+
+// INPUTS
+ema_len     = input.int(21,  "EMA Length",                  minval=1)
+atr_len     = input.int(50,  "ATR Length (50d)",             minval=1)
+sma_len     = input.int(10,  "SMA Length (10d)",             minval=1)
+hist_ma_len = input.int(10,  "Histogram MA Length",          minval=1)
+
+warn_level  = input.float(3.0, "Warning Level",  step=0.5)
+caution_lo  = input.float(2.0, "Caution Low",    step=0.5)
+
+show_caution_line = input.bool(true, "Show Caution Line")
+
+// COLORS
+col_normal        = input.color(color.new(#00BCD4, 20), "Bar Color (Normal)")
+col_warn          = input.color(color.new(#52ff89, 20), "Bar Color (Warning)")
+col_negative      = input.color(color.new(#FF9800, 20), "Bar Color (Negative/Below EMA)")
+col_negative_ext  = input.color(color.new(#F44336, 20), "Bar Color (Negative/Extreme >3 ATR)")
+col_ma            = input.color(color.new(#FF9800, 0),  "MA Line Color")
+col_warn_ln  = input.color(color.new(#F44336, 70), "Warning Line Color")
+
+// CORE CALCULATIONS
+ema21 = ta.ema(close, ema_len)
+atr50 = ta.atr(atr_len)
+
+low_ext  = (low  - ema21) / atr50
+high_ext = (high - ema21) / atr50
+
+// Positive when low is above EMA, negative when high is below EMA
+rsi_val = low >= ema21 ? low_ext : high_ext
+
+// Smoothed MA of the histogram value
+hist_ma = ta.ema(rsi_val, hist_ma_len)
+
+// Flip negative bars above zero so all columns render above the baseline
+plot_val    = math.abs(rsi_val)
+plot_ma_val = math.abs(hist_ma)
+
+// Color: negative bars are red above 3 ATR, orange below; positive bars are green at warning level, else cyan
+bar_col = rsi_val < 0 ? (plot_val >= warn_level ? col_negative_ext : col_negative) : rsi_val >= warn_level ? col_warn : col_normal
+
+// PLOTS
+plot(plot_val,    title="RSI Value",    style=plot.style_columns, color=bar_col, linewidth=1)
+plot(plot_ma_val, title="Histogram MA", color=col_ma, linewidth=2)
+
+// Reference lines
+hline(0,          "Zero Line",     color=color.new(color.gray, 60), linestyle=hline.style_dashed)
+hline(warn_level, "Warning Level", color=col_warn_ln,               linestyle=hline.style_solid, linewidth=2)
+hline(caution_lo, "Caution Low",   color=show_caution_line ? color.new(color.gray, 40) : color.new(color.gray, 100), linestyle=hline.style_dotted)
+
+// BACKGROUND COLORING
+bgcolor(rsi_val >= warn_level ? color.new(#FF5252, 92) : na, title="Warning Background")
+
+// LABEL showing current value on last bar
+if barstate.islast
+    label.new(bar_index, plot_val,
+         text      = str.tostring(rsi_val, "#.##"),
+         style     = label.style_label_left,
+         color     = color.new(color.black, 100),
+         textcolor = color.white,
+         size      = size.small)
+

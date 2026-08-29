@@ -1,0 +1,225 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © peterdmv
+//
+// Thanks to ArmerSchlucker for the original version of this table indicator.
+// Thanks to Qullamaggie / MikeC / TheScrutiniser and GlinckEastwoot for ADR% formula
+// Thanks to Stockbee for the TI65 indicator: https://stockbee.blogspot.com/2018/03/how-to-setup-trend-intensity-scans-and.html
+//
+// Release: v2 — uplifted to Pine v6 and refactored (button-style stat row).
+
+//@version=6
+indicator(title="Stock Stats", overlay=true)
+
+// Helper functions
+// Function to format large numbers into short displayable strings
+f_num(value) =>
+    str.tostring(math.round(value, 2))
+
+f_num_large(value) =>
+    if value >= 1e12
+        str.tostring(value / 1e12, '0.00') + 'T'
+    else if value >= 1e9
+        str.tostring(value / 1e9, '0.00') + 'B'
+    else if value >= 1e6
+        str.tostring(value / 1e6, '0.00') + 'M'
+    else if value >= 1e3
+        str.tostring(value / 1e3, '0.00') + 'K'
+    else
+        str.tostring(value, '0.00')
+
+f_num_percent(value) =>
+    str.tostring(math.round(value, 2)) + "%"
+
+// Market cap category label, using conventional breakpoints (Nano < $50M,
+// Micro < $300M, Small < $2B, Mid < $10B, Large < $200B, else Mega)
+f_cap_category(value) =>
+    if na(value)
+        "Mkt Cap"
+    else if value < 50e6
+        "Nano Cap"
+    else if value < 300e6
+        "Micro Cap"
+    else if value < 2e9
+        "Small Cap"
+    else if value < 10e9
+        "Mid Cap"
+    else if value < 200e9
+        "Large Cap"
+    else
+        "Mega Cap"
+
+// Configuration
+show_mkt_cap = input(true, title='Show Market Cap')
+show_float = input(false, title='Show Shares Float')
+show_adr = input(true, title="Show ADR%")
+show_atr = input(false, title="Show ATR")
+show_lod_dist = input(false, title="Show LoD dist.")
+show_ti = input(false, title="Show Trend Intensity 65 Days")
+show_52wk_high = input(false, title="Show 52-Week High")
+show_vol_buzz = input(true, title="Show Volume Buzz")
+show_run_rate = input(true, title="Show Run Rate",
+  tooltip="Projects today's full-session volume from the volume traded so far, shown " +
+  "as % vs. the average daily volume. For regular US equities (09:30–16:00 ET " +
+  "session), it corrects for the typical U-shaped intraday pattern (heavier volume " +
+  "at the open/close, lighter at midday) and compares to the 100-day average. For " +
+  "24/7 crypto tickers, it uses the full UTC day, assumes a flat intraday " +
+  "distribution, and compares to the trailing average for the same day of week — " +
+  "so a Saturday projects against recent Saturdays, capturing lower weekend volume.")
+
+adr_len = input(20, title="ADR% Length",
+  tooltip="The number of daily bars used in the calculation of the ADR%")
+atr_len = input(14, title="ATR Length",
+  tooltip="The number of daily bars used in the calculation of the ATR")
+
+bg_col = input(#00000000, title="Background Color")
+label_col = input(color.gray, title="Text Color (Labels)")
+mkt_cap_col = input(color.gray, title="Text Color (Mkt Cap)")
+float_col = input(color.gray, title="Text Color (Float)")
+adr_col = input(color.gray, title="Text Color (ADR%)")
+atr_col = input(color.gray, title="Text Color (ATR)")
+ti_col = input(color.gray, title="Text Color (TI65)")
+lod_dist_col = input(color.gray, title="Text Color (LoD dist.)")
+high_52wk_col = input(color.gray, title="Text Color (52-Week High)")
+vol_buzz_col = input(color.gray, title="Text Color (Volume Buzz)")
+run_rate_col = input(color.gray, title="Text Color (Run Rate)")
+show_empty_row = input(true, title="Add an empty row above the stat row",
+  tooltip="Serves the purpose of not having the pane icons overlap with the " +
+  "text in the table if multiple panes are shown and the chart pane is hovered")
+
+// Calculate indicators
+mkt_cape = syminfo.shares_outstanding_total * close
+mkt_caps = request.security(syminfo.tickerid, 'D', mkt_cape)
+
+floate = syminfo.shares_outstanding_float * close
+floats = request.security(syminfo.tickerid, 'D', floate)
+
+adre = 100 * (ta.sma(high / low, adr_len) - 1)
+adrs = request.security(syminfo.tickerid, 'D', adre)
+//atr = request.security(syminfo.tickerid, 'D', ta.atr(atr_len))
+atr_daily = request.security(syminfo.tickerid, 'D', ta.atr(atr_len))
+atr_weekly = request.security(syminfo.tickerid, 'W', ta.atr(atr_len))
+atr = timeframe.isweekly ? atr_weekly : atr_daily
+lod_dist = request.security(syminfo.tickerid, 'D', 100 * (close - low) / atr)
+ti65e = 100 * ta.sma(close, 7) / ta.sma(close, 65)
+ti65s = request.security(syminfo.tickerid, 'D', ti65e)
+high_52wk = request.security(syminfo.tickerid, 'W', ta.highest(high, 52))
+vol_buzze = (volume / ta.sma(volume, 100) - 1) * 100
+vol_buzzs = request.security(syminfo.tickerid, 'D', vol_buzze)
+
+// Run Rate
+// Projects today's full-session volume from the volume traded so far. The model
+// used depends on the ticker: regular US equities have a fixed session and a well-
+// documented open/close volume skew; crypto trades 24/7 with no such session and
+// no equally well-established intraday shape, so it gets a separate, simpler model.
+vol_today_e = volume
+vol_today_s = request.security(syminfo.tickerid, 'D', vol_today_e)
+
+// --- Equity/session model (regular US session, 09:30–16:00 ET) ---
+// f_cum_frac models the typical cumulative % of a session's total volume realized
+// by a given number of minutes elapsed since the open (390-minute session). This
+// is an approximate, generally-typical U-shaped curve — heaviest in the first and
+// last 30 minutes, thinnest around midday — not derived from this specific ticker.
+f_cum_frac(elapsed) =>
+    e = math.max(0.0, math.min(elapsed, 390.0))
+    if e <= 30
+        e / 30 * 0.21
+    else if e <= 90
+        0.21 + (e - 30) / 60 * (0.36 - 0.21)
+    else if e <= 150
+        0.36 + (e - 90) / 60 * (0.45 - 0.36)
+    else if e <= 210
+        0.45 + (e - 150) / 60 * (0.52 - 0.45)
+    else if e <= 270
+        0.52 + (e - 210) / 60 * (0.60 - 0.52)
+    else if e <= 330
+        0.60 + (e - 270) / 60 * (0.71 - 0.60)
+    else if e <= 360
+        0.71 + (e - 330) / 30 * (0.82 - 0.71)
+    else
+        0.82 + (e - 360) / 30 * (1.00 - 0.82)
+
+avg_vol_e = ta.sma(volume, 100)
+avg_vol_s = request.security(syminfo.tickerid, 'D', avg_vol_e)
+
+now_min_et = hour(timenow, "America/New_York") * 60 + minute(timenow, "America/New_York")
+equity_elapsed_min = now_min_et - (9 * 60 + 30)
+equity_frac_elapsed = f_cum_frac(equity_elapsed_min)
+equity_run_rate_pct = equity_frac_elapsed <= 0 ? na : ((vol_today_s / equity_frac_elapsed) / avg_vol_s - 1) * 100
+
+// --- Crypto (24/7) model ---
+// No session open/close, so "today" is the full UTC calendar day — the convention
+// TradingView's own daily bars use for crypto — and elapsed time is treated as
+// flat/uniform through the day: there's no well-established consensus intraday
+// volume shape across crypto venues/pairs the way there is for US equities, so
+// this deliberately doesn't guess at one.
+//
+// What IS well documented is that crypto volume drops on weekends (much of it is
+// still tied to TradFi desks that are closed then). Rather than a blunt weekend-
+// vs-weekday split, today is compared against the trailing average for the SAME
+// day of week (e.g. a Saturday projects against recent Saturdays, a Tuesday
+// against recent Tuesdays) — that captures the weekend effect naturally and is
+// simpler and more robust to compute than filtering a rolling window by day type.
+f_same_dow_avg(n_weeks) =>
+    sum = 0.0
+    for w = 1 to n_weeks
+        sum += volume[w * 7]
+    sum / n_weeks
+
+same_dow_avg_e = f_same_dow_avg(8)
+same_dow_avg_s = request.security(syminfo.tickerid, 'D', same_dow_avg_e)
+
+now_min_utc = hour(timenow, "UTC") * 60 + minute(timenow, "UTC")
+crypto_frac_elapsed = now_min_utc / 1440.0
+crypto_run_rate_pct = crypto_frac_elapsed <= 0 or na(same_dow_avg_s) or same_dow_avg_s == 0 ? na : ((vol_today_s / crypto_frac_elapsed) / same_dow_avg_s - 1) * 100
+
+run_rate_pct = syminfo.type == "crypto" ? crypto_run_rate_pct : equity_run_rate_pct
+
+// Create table
+// Each stat renders as a "button": a label cell stacked on a bold value cell,
+// both sharing the table's background so the pair reads as one chip. Chips are
+// packed left-to-right across a single row, skipping any stats toggled off.
+n_cols = (show_mkt_cap ? 1 : 0) + (show_float ? 1 : 0) + (show_adr ? 1 : 0) +
+  (show_atr ? 1 : 0) + (show_lod_dist ? 1 : 0) + (show_ti ? 1 : 0) +
+  (show_52wk_high ? 1 : 0) + (show_vol_buzz ? 1 : 0) + (show_run_rate ? 1 : 0)
+
+row_label = show_empty_row ? 1 : 0
+row_value = row_label + 1
+
+table t = table.new(position.top_right, math.max(n_cols, 1), row_value + 1, bgcolor=bg_col)
+
+f_chip(column, label, value, value_color) =>
+    table.cell(t, column, row_label, label, text_color=label_col, text_size=size.small, text_halign=text.align_center)
+    table.cell(t, column, row_value, value, text_color=value_color, text_size=size.normal, text_halign=text.align_center, text_formatting=text.format_bold)
+
+if barstate.islast and timeframe.period != "W" and timeframe.period != "M"
+    int col = 0
+    if show_empty_row
+        for c = 0 to n_cols - 1
+            table.cell(t, c, 0, "")
+    if show_mkt_cap
+        f_chip(col, f_cap_category(mkt_caps), f_num_large(mkt_caps), mkt_cap_col)
+        col += 1
+    if show_float
+        f_chip(col, "Float", f_num_large(floats), float_col)
+        col += 1
+    if show_adr
+        f_chip(col, "ADR%", f_num_percent(adrs), adr_col)
+        col += 1
+    if show_atr
+        f_chip(col, "ATR", f_num(atr), atr_col)
+        col += 1
+    if show_lod_dist
+        f_chip(col, "LoDD", f_num_percent(lod_dist), lod_dist_col)
+        col += 1
+    if show_ti
+        f_chip(col, "TI65", f_num_percent(ti65s), ti_col)
+        col += 1
+    if show_52wk_high
+        f_chip(col, "52W High", f_num(high_52wk), high_52wk_col)
+        col += 1
+    if show_vol_buzz
+        f_chip(col, "VolBuzz", f_num_percent(vol_buzzs), vol_buzz_col)
+        col += 1
+    if show_run_rate
+        f_chip(col, "RunRate", na(run_rate_pct) ? "–" : f_num_percent(run_rate_pct), run_rate_col)
+        col += 1

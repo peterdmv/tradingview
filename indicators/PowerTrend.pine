@@ -1,0 +1,93 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © peterdmv
+//
+// Recreation of Webby's Power Trend indicator (Mike Webster, IBD/O'Neil). Reimplemented for educational purposes.
+//
+// Release: v1
+
+//@version=6
+indicator("PowerTrend", overlay=true)
+
+// --- Inputs ---
+emaLen       = input.int(21,  "EMA Length",                       minval=1)
+smaLen       = input.int(50,  "SMA Length",                       minval=1)
+lowEmaDays   = input.int(10,  "Low Above EMA (consecutive days)", minval=1)
+emaSmadays   = input.int(5,   "EMA Above SMA (consecutive days)", minval=1)
+highLookback = input.int(252, "Recent High Lookback (days)",      minval=10)
+
+// --- Core indicators ---
+ema21 = ta.ema(close, emaLen)
+sma50 = ta.sma(close, smaLen)
+
+// --- Consecutive-day counters ---
+var int lowAboveEmaCount = 0
+var int emaAboveSmaCount = 0
+
+lowAboveEmaCount := low > ema21 ? lowAboveEmaCount + 1 : 0
+emaAboveSmaCount := ema21 > sma50 ? emaAboveSmaCount + 1 : 0
+
+// --- Four start conditions ---
+// 1. Daily low above 21 EMA for N consecutive days
+cond1 = lowAboveEmaCount >= lowEmaDays
+// 2. 21 EMA above 50 SMA for N consecutive days
+cond2 = emaAboveSmaCount >= emaSmadays
+// 3. 50 SMA trending upward
+cond3 = sma50 > sma50[1]
+// 4. Closes up on the day
+cond4 = close > open
+
+// --- End / circuit-breaker conditions ---
+// Primary: 21 EMA crosses back under 50 SMA
+endPrimary = ta.crossunder(ema21, sma50)
+
+// Circuit breaker: closes below 50 SMA while more than 10% off recent high
+recentHigh = ta.highest(high, highLookback)
+pctOffHigh = (recentHigh - close) / recentHigh * 100
+endCircuit = close < sma50 and pctOffHigh > 10.0
+
+// --- PowerTrend state machine ---
+var bool inPowerTrend = false
+
+if inPowerTrend
+    if endPrimary or endCircuit
+        inPowerTrend := false
+else
+    if cond1 and cond2 and cond3 and cond4
+        inPowerTrend := true
+
+// --- Visual output ---
+ema21Plot = plot(ema21, "21 EMA", color.new(color.blue, 0), 1)
+sma50Plot = plot(sma50, "50 SMA", color.new(color.orange, 0), 1)
+
+fill(ema21Plot, sma50Plot,
+     color = ema21 > sma50 ? color.new(color.green, 90) : color.new(color.red, 90),
+     title = "EMA/SMA Spread")
+
+bgcolor(inPowerTrend ? color.new(color.green, 85) : na, title = "PowerTrend Active")
+
+plotshape(not inPowerTrend[1] and inPowerTrend,
+     title    = "PowerTrend Start",
+     style    = shape.arrowup,
+     location = location.belowbar,
+     color    = color.green,
+     size     = size.normal)
+
+plotshape(inPowerTrend[1] and not inPowerTrend,
+     title    = "PowerTrend End",
+     style    = shape.arrowdown,
+     location = location.abovebar,
+     color    = color.red,
+     size     = size.normal)
+
+// --- Alerts ---
+alertcondition(not inPowerTrend[1] and inPowerTrend,
+     title   = "PowerTrend Started",
+     message = "PowerTrend activated — all four conditions met")
+
+alertcondition(inPowerTrend[1] and not inPowerTrend and endPrimary,
+     title   = "PowerTrend Ended (EMA cross)",
+     message = "PowerTrend ended — 21 EMA crossed below 50 SMA")
+
+alertcondition(inPowerTrend[1] and not inPowerTrend and endCircuit,
+     title   = "PowerTrend Ended (Circuit Breaker)",
+     message = "PowerTrend ended — circuit breaker triggered (close < 50 SMA and >10% off high)")
