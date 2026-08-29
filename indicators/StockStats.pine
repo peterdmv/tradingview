@@ -141,10 +141,26 @@ f_cum_frac(elapsed) =>
 avg_vol_e = ta.sma(volume, 100)
 avg_vol_s = request.security(syminfo.tickerid, 'D', avg_vol_e)
 
+// "Run rate" is a live projection, so it should only show a value while the
+// regular session is actually open right now — otherwise there's nothing left to
+// project (the latest daily bar is already a fully completed session) and it
+// would just silently duplicate Volume Buzz's number under a misleading label.
+// That requires the latest daily bar to actually be TODAY's (not a stale prior
+// session carried over a weekend/holiday) AND the current ET clock time to fall
+// within the regular session window.
+last_bar_day_s = request.security(syminfo.tickerid, 'D', dayofmonth)
+last_bar_month_s = request.security(syminfo.tickerid, 'D', month)
+last_bar_year_s = request.security(syminfo.tickerid, 'D', year)
+today_day_et = dayofmonth(timenow, "America/New_York")
+today_month_et = month(timenow, "America/New_York")
+today_year_et = year(timenow, "America/New_York")
+is_equity_session_today = last_bar_day_s == today_day_et and last_bar_month_s == today_month_et and last_bar_year_s == today_year_et
+
 now_min_et = hour(timenow, "America/New_York") * 60 + minute(timenow, "America/New_York")
 equity_elapsed_min = now_min_et - (9 * 60 + 30)
+is_equity_market_open = is_equity_session_today and equity_elapsed_min > 0 and equity_elapsed_min <= 390
 equity_frac_elapsed = f_cum_frac(equity_elapsed_min)
-equity_run_rate_pct = equity_frac_elapsed <= 0 ? na : ((vol_today_s / equity_frac_elapsed) / avg_vol_s - 1) * 100
+equity_run_rate_pct = is_equity_market_open ? ((vol_today_s / equity_frac_elapsed) / avg_vol_s - 1) * 100 : na
 
 // --- Crypto (24/7) model ---
 // No session open/close, so "today" is the full UTC calendar day — the convention
