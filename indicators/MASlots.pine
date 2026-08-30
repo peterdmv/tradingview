@@ -148,7 +148,7 @@ s6Monthly = input.bool(title='Monthly', defval=false, inline='S6b', group='Slot 
 s7Len = input.int(title='Period', minval=1, maxval=5000, defval=40, inline='S7a', group='Slot 7', display=display.data_window)
 s7Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S7a', group='Slot 7', display=display.data_window)
 s7Src = input.source(title='', defval=close, inline='S7a', group='Slot 7', display=display.data_window)
-s7Col = input.color(title='', defval=color.blue, inline='S7a', group='Slot 7', display=display.data_window)
+s7Col = input.color(title='', defval=color.red, inline='S7a', group='Slot 7', display=display.data_window)
 s7Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S7a', group='Slot 7', display=display.data_window)
 s7Intra = input.bool(title='Intraday', defval=false, inline='S7b', group='Slot 7', display=display.data_window)
 s7Daily = input.bool(title='Daily', defval=false, inline='S7b', group='Slot 7', display=display.data_window)
