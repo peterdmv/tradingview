@@ -366,11 +366,11 @@ vwapWidth = input.int(title='Width', minval=1, maxval=4, defval=1, inline='V1', 
 // the cloud won't draw and a warning label explains why on the chart.
 //***************************************************************************************
 
-cloudIntradayShow = input.bool(title='Show Cloud', defval=false, inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayShow = input.bool(title='Show Cloud', defval=true, inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
 cloudIntradayUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
 cloudIntradayDown = input.color(title='Down', defval=color.new(color.red, 90), inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
-cloudIntradayMA1 = input.int(title='Between Slot #', defval=1, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
-cloudIntradayMA2 = input.int(title='and #', defval=2, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayMA1 = input.int(title='Between Slot #', defval=4, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayMA2 = input.int(title='and #', defval=9, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
 
 cloudDailyShow = input.bool(title='Show Cloud', defval=false, inline='CDailya', group='Cloud - Daily', display=display.data_window)
 cloudDailyUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CDailya', group='Cloud - Daily', display=display.data_window)
