@@ -50,10 +50,12 @@ iIntraMA5Source = input.source(title='', defval=close, inline='I5', group='Intra
 iIntraMA5Color = input.color(title='', defval=color.gray, inline='I5', group='Intraday Moving Averages', display=display.data_window)
 iIntraMA5Width = input.int(title='Width', defval=1, minval=1, maxval=4, inline='I5w', group='Intraday Moving Averages', display=display.data_window)
 
-iIntraCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I6', display=display.data_window, tooltip='Fill area between the first two defined ' +
-     'moving averages with color. At a glance, you can see if the slower moving average is above or below the faster moving average.')
+iIntraCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I6', display=display.data_window, tooltip='Fill area between two selected moving averages ' +
+     '(pick which ones below). At a glance, you can see if the slower moving average is above or below the faster moving average.')
 iIntraCloudColorUp = input.color(title='   Up', defval=color.new(color.green, transp=90), inline='I6', display=display.data_window)
 iIntraCloudColorDown = input.color(title='Down', defval=color.new(color.red, transp=90), inline='I6', display=display.data_window)
+iIntraCloudMA1 = input.int(title='Between MA #', defval=1, minval=1, maxval=5, inline='I6b', display=display.data_window)
+iIntraCloudMA2 = input.int(title='and #', defval=2, minval=1, maxval=5, inline='I6b', display=display.data_window)
 
 iIntraVWAPVisible = input.bool(title='', defval=true, inline='I7', group='Intraday Indicators', display=display.data_window)
 iIntraVWAPSource = input.source(title='', defval=hlc3, inline='I7', group='Intraday Indicators', display=display.data_window)
@@ -113,16 +115,18 @@ iDailyMA7Source = input.source(title='', defval=close, inline='I13', group='Dail
 iDailyMA7Color = input.color(title='', defval=color.gray, inline='I13', group='Daily Moving Averages', display=display.data_window)
 iDailyMA7Width = input.int(title='Width', defval=1, minval=1, maxval=4, inline='I13w', group='Daily Moving Averages', display=display.data_window)
 
-iDailyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I14', display=display.data_window, tooltip='Fill area between the first two defined ' +
-     'moving averages with color. At a glance, you can see if the slower moving average is above or below the faster moving average.')
+iDailyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I14', display=display.data_window, tooltip='Fill area between two selected moving averages ' +
+     '(pick which ones below). At a glance, you can see if the slower moving average is above or below the faster moving average.')
 iDailyCloudColorUp = input.color(title='   Up', defval=color.new(color.green, transp=90), inline='I14', display=display.data_window)
 iDailyCloudColorDown = input.color(title='Down', defval=color.new(color.red, transp=90), inline='I14', display=display.data_window)
+iDailyCloudMA1 = input.int(title='Between MA #', defval=1, minval=1, maxval=7, inline='I14b', display=display.data_window)
+iDailyCloudMA2 = input.int(title='and #', defval=2, minval=1, maxval=7, inline='I14b', display=display.data_window)
 
-iWeeklyOnDaily = input.bool(title='Show Weekly on Daily', defval=false, inline='I14', display=display.data_window)
-iWeeklyOnDailyLength = input.int(title='Period', minval=1, maxval=5000, defval=10, inline='I14', display=display.data_window)
-iWeeklyOnDailyType = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='I14', display=display.data_window)
-iWeeklyOnDailyColor = input.color(title='', defval=color.olive, inline='I14', display=display.data_window)
-iWeeklyOnDailyWidth = input.int(title='Width', defval=1, minval=1, maxval=4, inline='I14w', display=display.data_window)
+iWeeklyOnDaily = input.bool(title='Show Weekly on Daily', defval=false, inline='WeeklyOnDaily', display=display.data_window)
+iWeeklyOnDailyLength = input.int(title='Period', minval=1, maxval=5000, defval=10, inline='WeeklyOnDaily', display=display.data_window)
+iWeeklyOnDailyType = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='WeeklyOnDaily', display=display.data_window)
+iWeeklyOnDailyColor = input.color(title='', defval=color.olive, inline='WeeklyOnDaily', display=display.data_window)
+iWeeklyOnDailyWidth = input.int(title='Width', defval=1, minval=1, maxval=4, inline='WeeklyOnDailyw', display=display.data_window)
 
 
 //---------------------------------------------------
@@ -156,10 +160,12 @@ iWeeklyMA4Source = input.source(title='', defval=close, inline='I17', group='Wee
 iWeeklyMA4Color = input.color(title='', defval=color.gray, inline='I17', group='Weekly Moving Averages', display=display.data_window)
 iWeeklyMA4Width = input.int(title='Width', defval=1, minval=1, maxval=4, inline='I17w', group='Weekly Moving Averages', display=display.data_window)
 
-iWeeklyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I18', display=display.data_window, tooltip='Fill area between the first two defined ' +
-     'moving averages with color. At a glance, you can see if the slower moving average is above or below the faster moving average.')
+iWeeklyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I18', display=display.data_window, tooltip='Fill area between two selected moving averages ' +
+     '(pick which ones below). At a glance, you can see if the slower moving average is above or below the faster moving average.')
 iWeeklyCloudColorUp = input.color(title='   Up', defval=color.new(color.green, transp=90), inline='I18', display=display.data_window)
 iWeeklyCloudColorDown = input.color(title='Down', defval=color.new(color.red, transp=90), inline='I18', display=display.data_window)
+iWeeklyCloudMA1 = input.int(title='Between MA #', defval=1, minval=1, maxval=4, inline='I18b', display=display.data_window)
+iWeeklyCloudMA2 = input.int(title='and #', defval=2, minval=1, maxval=4, inline='I18b', display=display.data_window)
 
 
 //---------------------------------------------------
@@ -193,10 +199,12 @@ iMonthlyMA4Source = input.source(title='', defval=close, inline='I22', group='Mo
 iMonthlyMA4Color = input.color(title='', defval=color.gray, inline='I22', group='Monthly Moving Averages', display=display.data_window)
 iMonthlyMA4Width = input.int(title='Width', defval=1, minval=1, maxval=4, inline='I22w', group='Monthly Moving Averages', display=display.data_window)
 
-iMonthlyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I23', display=display.data_window, tooltip='Fill area between the first two defined ' +
-     'moving averages with color. At a glance, you can see if the slower moving average is above or below the faster moving average.')
+iMonthlyCloud = input.bool(title='Show Moving Average Cloud', defval=false, inline='I23', display=display.data_window, tooltip='Fill area between two selected moving averages ' +
+     '(pick which ones below). At a glance, you can see if the slower moving average is above or below the faster moving average.')
 iMonthlyCloudColorUp = input.color(title='   Up', defval=color.new(color.green, transp=90), inline='I23', display=display.data_window)
 iMonthlyCloudColorDown = input.color(title='Down', defval=color.new(color.red, transp=90), inline='I23', display=display.data_window)
+iMonthlyCloudMA1 = input.int(title='Between MA #', defval=1, minval=1, maxval=4, inline='I23b', display=display.data_window)
+iMonthlyCloudMA2 = input.int(title='and #', defval=2, minval=1, maxval=4, inline='I23b', display=display.data_window)
 
 //***************************************************************************************
 // Helper functions
@@ -211,6 +219,20 @@ f_ma(src, len, maType) =>
         'RMA' => ta.rma(src, len)
         'VWMA' => ta.vwma(src, len)
         => ta.wma(src, len)
+
+// Picks one of up to 7 MA values by slot number (1-based), for whichever cloud
+// boundary the user selected. Timeframes with fewer than 7 MAs just pass na
+// for the unused slots — those indices are unreachable since the matching
+// "Between MA #" input's maxval caps out at that timeframe's actual MA count.
+f_pick(idx, float v1, float v2, float v3, float v4, float v5, float v6, float v7) =>
+    switch idx
+        1 => v1
+        2 => v2
+        3 => v3
+        4 => v4
+        5 => v5
+        6 => v6
+        => v7
 
 //***************************************************************************************
 // Plot moving averages
@@ -235,15 +257,23 @@ if (timeframe.isintraday)
 
 i1 = plot(iIntraMA1Visible and timeframe.isintraday ? intraMA1 : na, title='Intraday Moving Average #1', color=iIntraMA1Color, linewidth=iIntraMA1Width)
 i2 = plot(iIntraMA2Visible and timeframe.isintraday ? intraMA2 : na, title='Intraday Moving Average #2', color=iIntraMA2Color, linewidth=iIntraMA2Width)
-plot(iIntraMA3Visible and timeframe.isintraday ? intraMA3 : na, title='Intraday Moving Average #3', color=iIntraMA3Color, linewidth=iIntraMA3Width)
-plot(iIntraMA4Visible and timeframe.isintraday ? intraMA4 : na, title='Intraday Moving Average #4', color=iIntraMA4Color, linewidth=iIntraMA4Width)
-plot(iIntraMA5Visible and timeframe.isintraday ? intraMA5 : na, title='Intraday Moving Average #5', color=iIntraMA5Color, linewidth=iIntraMA5Width)
+i3 = plot(iIntraMA3Visible and timeframe.isintraday ? intraMA3 : na, title='Intraday Moving Average #3', color=iIntraMA3Color, linewidth=iIntraMA3Width)
+i4 = plot(iIntraMA4Visible and timeframe.isintraday ? intraMA4 : na, title='Intraday Moving Average #4', color=iIntraMA4Color, linewidth=iIntraMA4Width)
+i5 = plot(iIntraMA5Visible and timeframe.isintraday ? intraMA5 : na, title='Intraday Moving Average #5', color=iIntraMA5Color, linewidth=iIntraMA5Width)
 
-// Show moving average cloud
+// Show moving average cloud, between whichever two MAs were selected. Rather
+// than trying to dynamically re-point a plot reference at one of the existing
+// MA plots (Pine ties a plot to its original data series and won't let it be
+// reassigned to a different one), two new invisible plots are drawn from the
+// already-selected values, and the fill runs between those instead.
+intraCloudValA = f_pick(iIntraCloudMA1, intraMA1, intraMA2, intraMA3, intraMA4, intraMA5, na, na)
+intraCloudValB = f_pick(iIntraCloudMA2, intraMA1, intraMA2, intraMA3, intraMA4, intraMA5, na, na)
 fillColor = color.rgb(0, 0, 0, 100)  // Transparent
 if (iIntraCloud)
-    fillColor := intraMA1 < intraMA2 ? iIntraCloudColorDown : iIntraCloudColorUp
-fill(i1, i2, color=fillColor)
+    fillColor := intraCloudValA < intraCloudValB ? iIntraCloudColorDown : iIntraCloudColorUp
+intraCloudPlotA = plot(iIntraCloud and timeframe.isintraday ? intraCloudValA : na, title='Intraday Cloud Boundary A', display=display.none)
+intraCloudPlotB = plot(iIntraCloud and timeframe.isintraday ? intraCloudValB : na, title='Intraday Cloud Boundary B', display=display.none)
+fill(intraCloudPlotA, intraCloudPlotB, color=fillColor)
 
 plot(iIntraVWAPVisible and timeframe.isintraday ? intraVWAP : na, title='Intraday Volume Weighted Average Price', color=iIntraVWAPColor, linewidth=iIntraVWAPWidth)
 
@@ -268,21 +298,25 @@ if (timeframe.isdaily)
 
 d1 = plot(iDailyMA1Visible and timeframe.isdaily ? dailyMA1 : na, title='Daily Moving Average #1', color=iDailyMA1Color, linewidth=iDailyMA1Width)
 d2 = plot(iDailyMA2Visible and timeframe.isdaily ? dailyMA2 : na, title='Daily Moving Average #2', color=iDailyMA2Color, linewidth=iDailyMA2Width)
-plot(iDailyMA3Visible and timeframe.isdaily ? dailyMA3 : na, title='Daily Moving Average #3', color=iDailyMA3Color, linewidth=iDailyMA3Width)
-plot(iDailyMA4Visible and timeframe.isdaily ? dailyMA4 : na, title='Daily Moving Average #4', color=iDailyMA4Color, linewidth=iDailyMA4Width)
-plot(iDailyMA5Visible and timeframe.isdaily ? dailyMA5 : na, title='Daily Moving Average #5', color=iDailyMA5Color, linewidth=iDailyMA5Width)
-plot(iDailyMA6Visible and timeframe.isdaily ? dailyMA6 : na, title='Daily Moving Average #6', color=iDailyMA6Color, linewidth=iDailyMA6Width)
-plot(iDailyMA7Visible and timeframe.isdaily ? dailyMA7 : na, title='Daily Moving Average #6', color=iDailyMA7Color, linewidth=iDailyMA7Width)
+d3 = plot(iDailyMA3Visible and timeframe.isdaily ? dailyMA3 : na, title='Daily Moving Average #3', color=iDailyMA3Color, linewidth=iDailyMA3Width)
+d4 = plot(iDailyMA4Visible and timeframe.isdaily ? dailyMA4 : na, title='Daily Moving Average #4', color=iDailyMA4Color, linewidth=iDailyMA4Width)
+d5 = plot(iDailyMA5Visible and timeframe.isdaily ? dailyMA5 : na, title='Daily Moving Average #5', color=iDailyMA5Color, linewidth=iDailyMA5Width)
+d6 = plot(iDailyMA6Visible and timeframe.isdaily ? dailyMA6 : na, title='Daily Moving Average #6', color=iDailyMA6Color, linewidth=iDailyMA6Width)
+d7 = plot(iDailyMA7Visible and timeframe.isdaily ? dailyMA7 : na, title='Daily Moving Average #6', color=iDailyMA7Color, linewidth=iDailyMA7Width)
 
 // Show weekly on daily
 w = request.security(syminfo.tickerid, 'W', f_ma(close, iWeeklyOnDailyLength, iWeeklyOnDailyType), lookahead = barmerge.lookahead_on)
 plot(iWeeklyOnDaily and timeframe.isdaily ? w : na, color=iWeeklyOnDailyColor, linewidth=iWeeklyOnDailyWidth)
 
-// Show moving average cloud
+// Show moving average cloud, between whichever two MAs were selected
+dailyCloudValA = f_pick(iDailyCloudMA1, dailyMA1, dailyMA2, dailyMA3, dailyMA4, dailyMA5, dailyMA6, dailyMA7)
+dailyCloudValB = f_pick(iDailyCloudMA2, dailyMA1, dailyMA2, dailyMA3, dailyMA4, dailyMA5, dailyMA6, dailyMA7)
 fillColor := color.rgb(0, 0, 0, 100)  // Transparent
 if (iDailyCloud)
-    fillColor := dailyMA1 < dailyMA2 ? iDailyCloudColorDown : iDailyCloudColorUp
-fill(d1, d2, color=fillColor)
+    fillColor := dailyCloudValA < dailyCloudValB ? iDailyCloudColorDown : iDailyCloudColorUp
+dailyCloudPlotA = plot(iDailyCloud and timeframe.isdaily ? dailyCloudValA : na, title='Daily Cloud Boundary A', display=display.none)
+dailyCloudPlotB = plot(iDailyCloud and timeframe.isdaily ? dailyCloudValB : na, title='Daily Cloud Boundary B', display=display.none)
+fill(dailyCloudPlotA, dailyCloudPlotB, color=fillColor)
 
 //---------------------------------------------------
 // Weekly
@@ -299,14 +333,18 @@ if timeframe.isweekly
 
 w1 = plot(iWeeklyMA1Visible and timeframe.isweekly ? weeklyMA1 : na, title='Weekly Moving Average #1', color=iWeeklyMA1Color, linewidth=iWeeklyMA1Width)
 w2 = plot(iWeeklyMA2Visible and timeframe.isweekly ? weeklyMA2 : na, title='Weekly Moving Average #2', color=iWeeklyMA2Color, linewidth=iWeeklyMA2Width)
-plot(iWeeklyMA3Visible and timeframe.isweekly ? weeklyMA3 : na, title='Weekly Moving Average #3', color=iWeeklyMA3Color, linewidth=iWeeklyMA3Width)
-plot(iWeeklyMA4Visible and timeframe.isweekly ? weeklyMA4 : na, title='Weekly Moving Average #4', color=iWeeklyMA4Color, linewidth=iWeeklyMA4Width)
+w3 = plot(iWeeklyMA3Visible and timeframe.isweekly ? weeklyMA3 : na, title='Weekly Moving Average #3', color=iWeeklyMA3Color, linewidth=iWeeklyMA3Width)
+w4 = plot(iWeeklyMA4Visible and timeframe.isweekly ? weeklyMA4 : na, title='Weekly Moving Average #4', color=iWeeklyMA4Color, linewidth=iWeeklyMA4Width)
 
-// Show moving average cloud
+// Show moving average cloud, between whichever two MAs were selected
+weeklyCloudValA = f_pick(iWeeklyCloudMA1, weeklyMA1, weeklyMA2, weeklyMA3, weeklyMA4, na, na, na)
+weeklyCloudValB = f_pick(iWeeklyCloudMA2, weeklyMA1, weeklyMA2, weeklyMA3, weeklyMA4, na, na, na)
 fillColor := color.rgb(0, 0, 0, 100)  // Transparent
 if (iWeeklyCloud)
-    fillColor := weeklyMA1 < weeklyMA2 ? iWeeklyCloudColorDown : iWeeklyCloudColorUp
-fill(w1, w2, color=fillColor)
+    fillColor := weeklyCloudValA < weeklyCloudValB ? iWeeklyCloudColorDown : iWeeklyCloudColorUp
+weeklyCloudPlotA = plot(iWeeklyCloud and timeframe.isweekly ? weeklyCloudValA : na, title='Weekly Cloud Boundary A', display=display.none)
+weeklyCloudPlotB = plot(iWeeklyCloud and timeframe.isweekly ? weeklyCloudValB : na, title='Weekly Cloud Boundary B', display=display.none)
+fill(weeklyCloudPlotA, weeklyCloudPlotB, color=fillColor)
 
 
 //---------------------------------------------------
@@ -324,11 +362,15 @@ if (timeframe.ismonthly)
 
 m1 = plot(iMonthlyMA1Visible and timeframe.ismonthly ? monthlyMA1 : na, title='Monthly Moving Average #1', color=iMonthlyMA1Color, linewidth=iMonthlyMA1Width)
 m2 = plot(iMonthlyMA2Visible and timeframe.ismonthly ? monthlyMA2 : na, title='Monthly Moving Average #2', color=iMonthlyMA2Color, linewidth=iMonthlyMA2Width)
-plot(iMonthlyMA3Visible and timeframe.ismonthly ? monthlyMA3 : na, title='Monthly Moving Average #3', color=iMonthlyMA3Color, linewidth=iMonthlyMA3Width)
-plot(iMonthlyMA4Visible and timeframe.ismonthly ? monthlyMA4 : na, title='Monthly Moving Average #4', color=iMonthlyMA4Color, linewidth=iMonthlyMA4Width)
+m3 = plot(iMonthlyMA3Visible and timeframe.ismonthly ? monthlyMA3 : na, title='Monthly Moving Average #3', color=iMonthlyMA3Color, linewidth=iMonthlyMA3Width)
+m4 = plot(iMonthlyMA4Visible and timeframe.ismonthly ? monthlyMA4 : na, title='Monthly Moving Average #4', color=iMonthlyMA4Color, linewidth=iMonthlyMA4Width)
 
-// Show moving average cloud
+// Show moving average cloud, between whichever two MAs were selected
+monthlyCloudValA = f_pick(iMonthlyCloudMA1, monthlyMA1, monthlyMA2, monthlyMA3, monthlyMA4, na, na, na)
+monthlyCloudValB = f_pick(iMonthlyCloudMA2, monthlyMA1, monthlyMA2, monthlyMA3, monthlyMA4, na, na, na)
 fillColor := color.rgb(0, 0, 0, 100)  // Transparent
 if (iMonthlyCloud)
-    fillColor := monthlyMA1 < monthlyMA2 ? iMonthlyCloudColorDown : iMonthlyCloudColorUp
-fill(m1, m2, color=fillColor)
+    fillColor := monthlyCloudValA < monthlyCloudValB ? iMonthlyCloudColorDown : iMonthlyCloudColorUp
+monthlyCloudPlotA = plot(iMonthlyCloud and timeframe.ismonthly ? monthlyCloudValA : na, title='Monthly Cloud Boundary A', display=display.none)
+monthlyCloudPlotB = plot(iMonthlyCloud and timeframe.ismonthly ? monthlyCloudValB : na, title='Monthly Cloud Boundary B', display=display.none)
+fill(monthlyCloudPlotA, monthlyCloudPlotB, color=fillColor)
