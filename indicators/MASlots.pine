@@ -1,0 +1,588 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © peterdmv
+//
+// Independently designed and written from scratch: 20 flat, freely-assignable
+// MA slots (each can appear on any combination of Intraday/Daily/Weekly/Monthly
+// charts, computed natively — no cross-timeframe fetch, no repainting), plus 5
+// dedicated cross-timeframe overlay slots (e.g. weekly MA shown on a daily
+// chart) that intentionally do use request.security(), and per-class cloud
+// fills with on-chart validation if a cloud's chosen slots aren't both enabled
+// for the active timeframe.
+//
+// Release: v1
+
+//@version=6
+indicator(title='MA Slots — Multi-Timeframe', shorttitle='MA Slots', overlay=true)
+
+//***************************************************************************************
+// Helper functions
+//***************************************************************************************
+
+// MA-type dispatcher, shared by every slot.
+f_ma(src, len, maType) =>
+    switch maType
+        'SMA' => ta.sma(src, len)
+        'EMA' => ta.ema(src, len)
+        'RMA' => ta.rma(src, len)
+        'VWMA' => ta.vwma(src, len)
+        => ta.wma(src, len)
+
+// Picks one of 20 slot values by number (1-based), for cloud boundaries.
+f_pick(idx, float v1, float v2, float v3, float v4, float v5, float v6, float v7, float v8, float v9, float v10, float v11, float v12, float v13, float v14, float v15, float v16, float v17, float v18, float v19, float v20) =>
+    switch idx
+        1 => v1
+        2 => v2
+        3 => v3
+        4 => v4
+        5 => v5
+        6 => v6
+        7 => v7
+        8 => v8
+        9 => v9
+        10 => v10
+        11 => v11
+        12 => v12
+        13 => v13
+        14 => v14
+        15 => v15
+        16 => v16
+        17 => v17
+        18 => v18
+        19 => v19
+        => v20
+
+// Picks one of 20 slot enable-checkboxes by number, to validate a cloud's
+// chosen pair is actually enabled for the timeframe class being checked.
+f_pickBool(idx, bool v1, bool v2, bool v3, bool v4, bool v5, bool v6, bool v7, bool v8, bool v9, bool v10, bool v11, bool v12, bool v13, bool v14, bool v15, bool v16, bool v17, bool v18, bool v19, bool v20) =>
+    switch idx
+        1 => v1
+        2 => v2
+        3 => v3
+        4 => v4
+        5 => v5
+        6 => v6
+        7 => v7
+        8 => v8
+        9 => v9
+        10 => v10
+        11 => v11
+        12 => v12
+        13 => v13
+        14 => v14
+        15 => v15
+        16 => v16
+        17 => v17
+        18 => v18
+        19 => v19
+        => v20
+
+//***************************************************************************************
+// Inputs — Native Slots
+// Each slot is computed on the chart's own bars (no cross-timeframe fetch, no
+// repainting) and just needs its relevant timeframe box(es) checked to appear
+// there. One slot with both Daily and Weekly checked shows a normal Daily-native
+// line while viewing a daily chart, and a normal Weekly-native line while
+// viewing a weekly chart — never both at once, no stepping.
+//***************************************************************************************
+
+s1Len = input.int(title='Period', minval=1, maxval=5000, defval=4, inline='S1a', group='Slot 1', display=display.data_window)
+s1Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S1a', group='Slot 1', display=display.data_window)
+s1Src = input.source(title='', defval=close, inline='S1a', group='Slot 1', display=display.data_window)
+s1Col = input.color(title='', defval=color.silver, inline='S1a', group='Slot 1', display=display.data_window)
+s1Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S1a', group='Slot 1', display=display.data_window)
+s1Intra = input.bool(title='Intraday', defval=false, inline='S1b', group='Slot 1', display=display.data_window)
+s1Daily = input.bool(title='Daily', defval=true, inline='S1b', group='Slot 1', display=display.data_window)
+s1Weekly = input.bool(title='Weekly', defval=false, inline='S1b', group='Slot 1', display=display.data_window)
+s1Monthly = input.bool(title='Monthly', defval=false, inline='S1b', group='Slot 1', display=display.data_window)
+
+s2Len = input.int(title='Period', minval=1, maxval=5000, defval=8, inline='S2a', group='Slot 2', display=display.data_window)
+s2Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S2a', group='Slot 2', display=display.data_window)
+s2Src = input.source(title='', defval=close, inline='S2a', group='Slot 2', display=display.data_window)
+s2Col = input.color(title='', defval=color.green, inline='S2a', group='Slot 2', display=display.data_window)
+s2Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S2a', group='Slot 2', display=display.data_window)
+s2Intra = input.bool(title='Intraday', defval=true, inline='S2b', group='Slot 2', display=display.data_window)
+s2Daily = input.bool(title='Daily', defval=true, inline='S2b', group='Slot 2', display=display.data_window)
+s2Weekly = input.bool(title='Weekly', defval=false, inline='S2b', group='Slot 2', display=display.data_window)
+s2Monthly = input.bool(title='Monthly', defval=false, inline='S2b', group='Slot 2', display=display.data_window)
+
+s3Len = input.int(title='Period', minval=1, maxval=5000, defval=10, inline='S3a', group='Slot 3', display=display.data_window)
+s3Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S3a', group='Slot 3', display=display.data_window)
+s3Src = input.source(title='', defval=close, inline='S3a', group='Slot 3', display=display.data_window)
+s3Col = input.color(title='', defval=color.lime, inline='S3a', group='Slot 3', display=display.data_window)
+s3Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S3a', group='Slot 3', display=display.data_window)
+s3Intra = input.bool(title='Intraday', defval=false, inline='S3b', group='Slot 3', display=display.data_window)
+s3Daily = input.bool(title='Daily', defval=false, inline='S3b', group='Slot 3', display=display.data_window)
+s3Weekly = input.bool(title='Weekly', defval=true, inline='S3b', group='Slot 3', display=display.data_window)
+s3Monthly = input.bool(title='Monthly', defval=true, inline='S3b', group='Slot 3', display=display.data_window)
+
+s4Len = input.int(title='Period', minval=1, maxval=5000, defval=21, inline='S4a', group='Slot 4', display=display.data_window)
+s4Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S4a', group='Slot 4', display=display.data_window)
+s4Src = input.source(title='', defval=close, inline='S4a', group='Slot 4', display=display.data_window)
+s4Col = input.color(title='', defval=color.purple, inline='S4a', group='Slot 4', display=display.data_window)
+s4Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S4a', group='Slot 4', display=display.data_window)
+s4Intra = input.bool(title='Intraday', defval=true, inline='S4b', group='Slot 4', display=display.data_window)
+s4Daily = input.bool(title='Daily', defval=true, inline='S4b', group='Slot 4', display=display.data_window)
+s4Weekly = input.bool(title='Weekly', defval=false, inline='S4b', group='Slot 4', display=display.data_window)
+s4Monthly = input.bool(title='Monthly', defval=false, inline='S4b', group='Slot 4', display=display.data_window)
+
+s5Len = input.int(title='Period', minval=1, maxval=5000, defval=24, inline='S5a', group='Slot 5', display=display.data_window)
+s5Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S5a', group='Slot 5', display=display.data_window)
+s5Src = input.source(title='', defval=close, inline='S5a', group='Slot 5', display=display.data_window)
+s5Col = input.color(title='', defval=color.gray, inline='S5a', group='Slot 5', display=display.data_window)
+s5Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S5a', group='Slot 5', display=display.data_window)
+s5Intra = input.bool(title='Intraday', defval=false, inline='S5b', group='Slot 5', display=display.data_window)
+s5Daily = input.bool(title='Daily', defval=false, inline='S5b', group='Slot 5', display=display.data_window)
+s5Weekly = input.bool(title='Weekly', defval=false, inline='S5b', group='Slot 5', display=display.data_window)
+s5Monthly = input.bool(title='Monthly', defval=true, inline='S5b', group='Slot 5', display=display.data_window)
+
+s6Len = input.int(title='Period', minval=1, maxval=5000, defval=30, inline='S6a', group='Slot 6', display=display.data_window)
+s6Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S6a', group='Slot 6', display=display.data_window)
+s6Src = input.source(title='', defval=close, inline='S6a', group='Slot 6', display=display.data_window)
+s6Col = input.color(title='', defval=color.purple, inline='S6a', group='Slot 6', display=display.data_window)
+s6Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S6a', group='Slot 6', display=display.data_window)
+s6Intra = input.bool(title='Intraday', defval=false, inline='S6b', group='Slot 6', display=display.data_window)
+s6Daily = input.bool(title='Daily', defval=false, inline='S6b', group='Slot 6', display=display.data_window)
+s6Weekly = input.bool(title='Weekly', defval=true, inline='S6b', group='Slot 6', display=display.data_window)
+s6Monthly = input.bool(title='Monthly', defval=false, inline='S6b', group='Slot 6', display=display.data_window)
+
+s7Len = input.int(title='Period', minval=1, maxval=5000, defval=40, inline='S7a', group='Slot 7', display=display.data_window)
+s7Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S7a', group='Slot 7', display=display.data_window)
+s7Src = input.source(title='', defval=close, inline='S7a', group='Slot 7', display=display.data_window)
+s7Col = input.color(title='', defval=color.blue, inline='S7a', group='Slot 7', display=display.data_window)
+s7Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S7a', group='Slot 7', display=display.data_window)
+s7Intra = input.bool(title='Intraday', defval=false, inline='S7b', group='Slot 7', display=display.data_window)
+s7Daily = input.bool(title='Daily', defval=false, inline='S7b', group='Slot 7', display=display.data_window)
+s7Weekly = input.bool(title='Weekly', defval=true, inline='S7b', group='Slot 7', display=display.data_window)
+s7Monthly = input.bool(title='Monthly', defval=false, inline='S7b', group='Slot 7', display=display.data_window)
+
+s8Len = input.int(title='Period', minval=1, maxval=5000, defval=48, inline='S8a', group='Slot 8', display=display.data_window)
+s8Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S8a', group='Slot 8', display=display.data_window)
+s8Src = input.source(title='', defval=close, inline='S8a', group='Slot 8', display=display.data_window)
+s8Col = input.color(title='', defval=color.red, inline='S8a', group='Slot 8', display=display.data_window)
+s8Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S8a', group='Slot 8', display=display.data_window)
+s8Intra = input.bool(title='Intraday', defval=false, inline='S8b', group='Slot 8', display=display.data_window)
+s8Daily = input.bool(title='Daily', defval=false, inline='S8b', group='Slot 8', display=display.data_window)
+s8Weekly = input.bool(title='Weekly', defval=false, inline='S8b', group='Slot 8', display=display.data_window)
+s8Monthly = input.bool(title='Monthly', defval=true, inline='S8b', group='Slot 8', display=display.data_window)
+
+s9Len = input.int(title='Period', minval=1, maxval=5000, defval=50, inline='S9a', group='Slot 9', display=display.data_window)
+s9Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S9a', group='Slot 9', display=display.data_window)
+s9Src = input.source(title='', defval=close, inline='S9a', group='Slot 9', display=display.data_window)
+s9Col = input.color(title='', defval=color.red, inline='S9a', group='Slot 9', display=display.data_window)
+s9Width = input.int(title='Width', minval=1, maxval=4, defval=2, inline='S9a', group='Slot 9', display=display.data_window)
+s9Intra = input.bool(title='Intraday', defval=false, inline='S9b', group='Slot 9', display=display.data_window)
+s9Daily = input.bool(title='Daily', defval=true, inline='S9b', group='Slot 9', display=display.data_window)
+s9Weekly = input.bool(title='Weekly', defval=false, inline='S9b', group='Slot 9', display=display.data_window)
+s9Monthly = input.bool(title='Monthly', defval=false, inline='S9b', group='Slot 9', display=display.data_window)
+
+s10Len = input.int(title='Period', minval=1, maxval=5000, defval=65, inline='S10a', group='Slot 10', display=display.data_window)
+s10Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S10a', group='Slot 10', display=display.data_window)
+s10Src = input.source(title='', defval=close, inline='S10a', group='Slot 10', display=display.data_window)
+s10Col = input.color(title='', defval=color.maroon, inline='S10a', group='Slot 10', display=display.data_window)
+s10Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S10a', group='Slot 10', display=display.data_window)
+s10Intra = input.bool(title='Intraday', defval=true, inline='S10b', group='Slot 10', display=display.data_window)
+s10Daily = input.bool(title='Daily', defval=true, inline='S10b', group='Slot 10', display=display.data_window)
+s10Weekly = input.bool(title='Weekly', defval=false, inline='S10b', group='Slot 10', display=display.data_window)
+s10Monthly = input.bool(title='Monthly', defval=false, inline='S10b', group='Slot 10', display=display.data_window)
+
+s11Len = input.int(title='Period', minval=1, maxval=5000, defval=96, inline='S11a', group='Slot 11', display=display.data_window)
+s11Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S11a', group='Slot 11', display=display.data_window)
+s11Src = input.source(title='', defval=close, inline='S11a', group='Slot 11', display=display.data_window)
+s11Col = input.color(title='', defval=color.gray, inline='S11a', group='Slot 11', display=display.data_window)
+s11Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S11a', group='Slot 11', display=display.data_window)
+s11Intra = input.bool(title='Intraday', defval=false, inline='S11b', group='Slot 11', display=display.data_window)
+s11Daily = input.bool(title='Daily', defval=false, inline='S11b', group='Slot 11', display=display.data_window)
+s11Weekly = input.bool(title='Weekly', defval=false, inline='S11b', group='Slot 11', display=display.data_window)
+s11Monthly = input.bool(title='Monthly', defval=false, inline='S11b', group='Slot 11', display=display.data_window)
+
+s12Len = input.int(title='Period', minval=1, maxval=5000, defval=100, inline='S12a', group='Slot 12', display=display.data_window)
+s12Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S12a', group='Slot 12', display=display.data_window)
+s12Src = input.source(title='', defval=close, inline='S12a', group='Slot 12', display=display.data_window)
+s12Col = input.color(title='', defval=color.gray, inline='S12a', group='Slot 12', display=display.data_window)
+s12Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S12a', group='Slot 12', display=display.data_window)
+s12Intra = input.bool(title='Intraday', defval=false, inline='S12b', group='Slot 12', display=display.data_window)
+s12Daily = input.bool(title='Daily', defval=false, inline='S12b', group='Slot 12', display=display.data_window)
+s12Weekly = input.bool(title='Weekly', defval=false, inline='S12b', group='Slot 12', display=display.data_window)
+s12Monthly = input.bool(title='Monthly', defval=false, inline='S12b', group='Slot 12', display=display.data_window)
+
+s13Len = input.int(title='Period', minval=1, maxval=5000, defval=144, inline='S13a', group='Slot 13', display=display.data_window)
+s13Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S13a', group='Slot 13', display=display.data_window)
+s13Src = input.source(title='', defval=close, inline='S13a', group='Slot 13', display=display.data_window)
+s13Col = input.color(title='', defval=color.gray, inline='S13a', group='Slot 13', display=display.data_window)
+s13Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S13a', group='Slot 13', display=display.data_window)
+s13Intra = input.bool(title='Intraday', defval=true, inline='S13b', group='Slot 13', display=display.data_window)
+s13Daily = input.bool(title='Daily', defval=false, inline='S13b', group='Slot 13', display=display.data_window)
+s13Weekly = input.bool(title='Weekly', defval=false, inline='S13b', group='Slot 13', display=display.data_window)
+s13Monthly = input.bool(title='Monthly', defval=false, inline='S13b', group='Slot 13', display=display.data_window)
+
+s14Len = input.int(title='Period', minval=1, maxval=5000, defval=200, inline='S14a', group='Slot 14', display=display.data_window)
+s14Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S14a', group='Slot 14', display=display.data_window)
+s14Src = input.source(title='', defval=close, inline='S14a', group='Slot 14', display=display.data_window)
+s14Col = input.color(title='', defval=color.gray, inline='S14a', group='Slot 14', display=display.data_window)
+s14Width = input.int(title='Width', minval=1, maxval=4, defval=2, inline='S14a', group='Slot 14', display=display.data_window)
+s14Intra = input.bool(title='Intraday', defval=false, inline='S14b', group='Slot 14', display=display.data_window)
+s14Daily = input.bool(title='Daily', defval=true, inline='S14b', group='Slot 14', display=display.data_window)
+s14Weekly = input.bool(title='Weekly', defval=false, inline='S14b', group='Slot 14', display=display.data_window)
+s14Monthly = input.bool(title='Monthly', defval=false, inline='S14b', group='Slot 14', display=display.data_window)
+
+s15Len = input.int(title='Period', minval=1, maxval=5000, defval=377, inline='S15a', group='Slot 15', display=display.data_window)
+s15Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='EMA', inline='S15a', group='Slot 15', display=display.data_window)
+s15Src = input.source(title='', defval=close, inline='S15a', group='Slot 15', display=display.data_window)
+s15Col = input.color(title='', defval=color.gray, inline='S15a', group='Slot 15', display=display.data_window)
+s15Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S15a', group='Slot 15', display=display.data_window)
+s15Intra = input.bool(title='Intraday', defval=false, inline='S15b', group='Slot 15', display=display.data_window)
+s15Daily = input.bool(title='Daily', defval=false, inline='S15b', group='Slot 15', display=display.data_window)
+s15Weekly = input.bool(title='Weekly', defval=false, inline='S15b', group='Slot 15', display=display.data_window)
+s15Monthly = input.bool(title='Monthly', defval=false, inline='S15b', group='Slot 15', display=display.data_window)
+
+s16Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='S16a', group='Slot 16', display=display.data_window)
+s16Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S16a', group='Slot 16', display=display.data_window)
+s16Src = input.source(title='', defval=close, inline='S16a', group='Slot 16', display=display.data_window)
+s16Col = input.color(title='', defval=color.gray, inline='S16a', group='Slot 16', display=display.data_window)
+s16Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S16a', group='Slot 16', display=display.data_window)
+s16Intra = input.bool(title='Intraday', defval=false, inline='S16b', group='Slot 16', display=display.data_window)
+s16Daily = input.bool(title='Daily', defval=false, inline='S16b', group='Slot 16', display=display.data_window)
+s16Weekly = input.bool(title='Weekly', defval=false, inline='S16b', group='Slot 16', display=display.data_window)
+s16Monthly = input.bool(title='Monthly', defval=false, inline='S16b', group='Slot 16', display=display.data_window)
+
+s17Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='S17a', group='Slot 17', display=display.data_window)
+s17Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S17a', group='Slot 17', display=display.data_window)
+s17Src = input.source(title='', defval=close, inline='S17a', group='Slot 17', display=display.data_window)
+s17Col = input.color(title='', defval=color.gray, inline='S17a', group='Slot 17', display=display.data_window)
+s17Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S17a', group='Slot 17', display=display.data_window)
+s17Intra = input.bool(title='Intraday', defval=false, inline='S17b', group='Slot 17', display=display.data_window)
+s17Daily = input.bool(title='Daily', defval=false, inline='S17b', group='Slot 17', display=display.data_window)
+s17Weekly = input.bool(title='Weekly', defval=false, inline='S17b', group='Slot 17', display=display.data_window)
+s17Monthly = input.bool(title='Monthly', defval=false, inline='S17b', group='Slot 17', display=display.data_window)
+
+s18Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='S18a', group='Slot 18', display=display.data_window)
+s18Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S18a', group='Slot 18', display=display.data_window)
+s18Src = input.source(title='', defval=close, inline='S18a', group='Slot 18', display=display.data_window)
+s18Col = input.color(title='', defval=color.gray, inline='S18a', group='Slot 18', display=display.data_window)
+s18Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S18a', group='Slot 18', display=display.data_window)
+s18Intra = input.bool(title='Intraday', defval=false, inline='S18b', group='Slot 18', display=display.data_window)
+s18Daily = input.bool(title='Daily', defval=false, inline='S18b', group='Slot 18', display=display.data_window)
+s18Weekly = input.bool(title='Weekly', defval=false, inline='S18b', group='Slot 18', display=display.data_window)
+s18Monthly = input.bool(title='Monthly', defval=false, inline='S18b', group='Slot 18', display=display.data_window)
+
+s19Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='S19a', group='Slot 19', display=display.data_window)
+s19Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S19a', group='Slot 19', display=display.data_window)
+s19Src = input.source(title='', defval=close, inline='S19a', group='Slot 19', display=display.data_window)
+s19Col = input.color(title='', defval=color.gray, inline='S19a', group='Slot 19', display=display.data_window)
+s19Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S19a', group='Slot 19', display=display.data_window)
+s19Intra = input.bool(title='Intraday', defval=false, inline='S19b', group='Slot 19', display=display.data_window)
+s19Daily = input.bool(title='Daily', defval=false, inline='S19b', group='Slot 19', display=display.data_window)
+s19Weekly = input.bool(title='Weekly', defval=false, inline='S19b', group='Slot 19', display=display.data_window)
+s19Monthly = input.bool(title='Monthly', defval=false, inline='S19b', group='Slot 19', display=display.data_window)
+
+s20Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='S20a', group='Slot 20', display=display.data_window)
+s20Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='S20a', group='Slot 20', display=display.data_window)
+s20Src = input.source(title='', defval=close, inline='S20a', group='Slot 20', display=display.data_window)
+s20Col = input.color(title='', defval=color.gray, inline='S20a', group='Slot 20', display=display.data_window)
+s20Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='S20a', group='Slot 20', display=display.data_window)
+s20Intra = input.bool(title='Intraday', defval=false, inline='S20b', group='Slot 20', display=display.data_window)
+s20Daily = input.bool(title='Daily', defval=false, inline='S20b', group='Slot 20', display=display.data_window)
+s20Weekly = input.bool(title='Weekly', defval=false, inline='S20b', group='Slot 20', display=display.data_window)
+s20Monthly = input.bool(title='Monthly', defval=false, inline='S20b', group='Slot 20', display=display.data_window)
+
+//***************************************************************************************
+// Inputs — Cross-Timeframe Overlays
+// These intentionally DO fetch a different timeframe than your chart (e.g. a
+// Weekly MA shown on a Daily chart) via request.security(). Because the source
+// bar updates less often than your chart, the line will hold flat and then step
+// to a new value — that's expected for this feature, not a bug. Historical bars
+// also show the completed source-timeframe value early, which can differ from
+// what a live chart showed in real time (repainting) — a known trade-off of
+// this technique, not specific to any single MA type.
+//***************************************************************************************
+
+o1Len = input.int(title='Period', minval=1, maxval=5000, defval=10, inline='O1a', group='Overlay 1', display=display.data_window)
+o1Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='O1a', group='Overlay 1', display=display.data_window)
+o1Src = input.source(title='', defval=close, inline='O1a', group='Overlay 1', display=display.data_window)
+o1Col = input.color(title='', defval=color.olive, inline='O1a', group='Overlay 1', display=display.data_window)
+o1Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='O1a', group='Overlay 1', display=display.data_window)
+o1SrcTF = input.string(title='Source TF', options=['D', 'W', 'M'], defval='W', inline='O1b', group='Overlay 1', display=display.data_window)
+o1DispIntra = input.bool(title='Intraday', defval=false, inline='O1b', group='Overlay 1', display=display.data_window)
+o1DispDaily = input.bool(title='Daily', defval=true, inline='O1b', group='Overlay 1', display=display.data_window)
+o1DispWeekly = input.bool(title='Weekly', defval=false, inline='O1b', group='Overlay 1', display=display.data_window)
+o1DispMonthly = input.bool(title='Monthly', defval=false, inline='O1b', group='Overlay 1', display=display.data_window)
+
+o2Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='O2a', group='Overlay 2', display=display.data_window)
+o2Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='O2a', group='Overlay 2', display=display.data_window)
+o2Src = input.source(title='', defval=close, inline='O2a', group='Overlay 2', display=display.data_window)
+o2Col = input.color(title='', defval=color.gray, inline='O2a', group='Overlay 2', display=display.data_window)
+o2Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='O2a', group='Overlay 2', display=display.data_window)
+o2SrcTF = input.string(title='Source TF', options=['D', 'W', 'M'], defval='D', inline='O2b', group='Overlay 2', display=display.data_window)
+o2DispIntra = input.bool(title='Intraday', defval=false, inline='O2b', group='Overlay 2', display=display.data_window)
+o2DispDaily = input.bool(title='Daily', defval=false, inline='O2b', group='Overlay 2', display=display.data_window)
+o2DispWeekly = input.bool(title='Weekly', defval=false, inline='O2b', group='Overlay 2', display=display.data_window)
+o2DispMonthly = input.bool(title='Monthly', defval=false, inline='O2b', group='Overlay 2', display=display.data_window)
+
+o3Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='O3a', group='Overlay 3', display=display.data_window)
+o3Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='O3a', group='Overlay 3', display=display.data_window)
+o3Src = input.source(title='', defval=close, inline='O3a', group='Overlay 3', display=display.data_window)
+o3Col = input.color(title='', defval=color.gray, inline='O3a', group='Overlay 3', display=display.data_window)
+o3Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='O3a', group='Overlay 3', display=display.data_window)
+o3SrcTF = input.string(title='Source TF', options=['D', 'W', 'M'], defval='D', inline='O3b', group='Overlay 3', display=display.data_window)
+o3DispIntra = input.bool(title='Intraday', defval=false, inline='O3b', group='Overlay 3', display=display.data_window)
+o3DispDaily = input.bool(title='Daily', defval=false, inline='O3b', group='Overlay 3', display=display.data_window)
+o3DispWeekly = input.bool(title='Weekly', defval=false, inline='O3b', group='Overlay 3', display=display.data_window)
+o3DispMonthly = input.bool(title='Monthly', defval=false, inline='O3b', group='Overlay 3', display=display.data_window)
+
+o4Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='O4a', group='Overlay 4', display=display.data_window)
+o4Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='O4a', group='Overlay 4', display=display.data_window)
+o4Src = input.source(title='', defval=close, inline='O4a', group='Overlay 4', display=display.data_window)
+o4Col = input.color(title='', defval=color.gray, inline='O4a', group='Overlay 4', display=display.data_window)
+o4Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='O4a', group='Overlay 4', display=display.data_window)
+o4SrcTF = input.string(title='Source TF', options=['D', 'W', 'M'], defval='D', inline='O4b', group='Overlay 4', display=display.data_window)
+o4DispIntra = input.bool(title='Intraday', defval=false, inline='O4b', group='Overlay 4', display=display.data_window)
+o4DispDaily = input.bool(title='Daily', defval=false, inline='O4b', group='Overlay 4', display=display.data_window)
+o4DispWeekly = input.bool(title='Weekly', defval=false, inline='O4b', group='Overlay 4', display=display.data_window)
+o4DispMonthly = input.bool(title='Monthly', defval=false, inline='O4b', group='Overlay 4', display=display.data_window)
+
+o5Len = input.int(title='Period', minval=1, maxval=5000, defval=20, inline='O5a', group='Overlay 5', display=display.data_window)
+o5Type = input.string(title='', options=['SMA', 'EMA', 'RMA', 'VWMA', 'WMA'], defval='SMA', inline='O5a', group='Overlay 5', display=display.data_window)
+o5Src = input.source(title='', defval=close, inline='O5a', group='Overlay 5', display=display.data_window)
+o5Col = input.color(title='', defval=color.gray, inline='O5a', group='Overlay 5', display=display.data_window)
+o5Width = input.int(title='Width', minval=1, maxval=4, defval=1, inline='O5a', group='Overlay 5', display=display.data_window)
+o5SrcTF = input.string(title='Source TF', options=['D', 'W', 'M'], defval='D', inline='O5b', group='Overlay 5', display=display.data_window)
+o5DispIntra = input.bool(title='Intraday', defval=false, inline='O5b', group='Overlay 5', display=display.data_window)
+o5DispDaily = input.bool(title='Daily', defval=false, inline='O5b', group='Overlay 5', display=display.data_window)
+o5DispWeekly = input.bool(title='Weekly', defval=false, inline='O5b', group='Overlay 5', display=display.data_window)
+o5DispMonthly = input.bool(title='Monthly', defval=false, inline='O5b', group='Overlay 5', display=display.data_window)
+
+//***************************************************************************************
+// Inputs — Intraday VWAP
+//***************************************************************************************
+
+vwapShow = input.bool(title='Show', defval=true, inline='V1', group='VWAP', display=display.data_window)
+vwapSrc = input.source(title='', defval=hlc3, inline='V1', group='VWAP', display=display.data_window)
+vwapCol = input.color(title='', defval=color.orange, inline='V1', group='VWAP', display=display.data_window)
+vwapWidth = input.int(title='Width', minval=1, maxval=4, defval=1, inline='V1', group='VWAP', display=display.data_window)
+
+//***************************************************************************************
+// Inputs — Clouds (one per timeframe class)
+// Pick two Slot numbers that are BOTH enabled for this class. If they aren't,
+// the cloud won't draw and a warning label explains why on the chart.
+//***************************************************************************************
+
+cloudIntradayShow = input.bool(title='Show Cloud', defval=false, inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayDown = input.color(title='Down', defval=color.new(color.red, 90), inline='CIntradaya', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayMA1 = input.int(title='Between Slot #', defval=1, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
+cloudIntradayMA2 = input.int(title='and #', defval=2, minval=1, maxval=20, inline='CIntradayb', group='Cloud - Intraday', display=display.data_window)
+
+cloudDailyShow = input.bool(title='Show Cloud', defval=false, inline='CDailya', group='Cloud - Daily', display=display.data_window)
+cloudDailyUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CDailya', group='Cloud - Daily', display=display.data_window)
+cloudDailyDown = input.color(title='Down', defval=color.new(color.red, 90), inline='CDailya', group='Cloud - Daily', display=display.data_window)
+cloudDailyMA1 = input.int(title='Between Slot #', defval=1, minval=1, maxval=20, inline='CDailyb', group='Cloud - Daily', display=display.data_window)
+cloudDailyMA2 = input.int(title='and #', defval=2, minval=1, maxval=20, inline='CDailyb', group='Cloud - Daily', display=display.data_window)
+
+cloudWeeklyShow = input.bool(title='Show Cloud', defval=false, inline='CWeeklya', group='Cloud - Weekly', display=display.data_window)
+cloudWeeklyUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CWeeklya', group='Cloud - Weekly', display=display.data_window)
+cloudWeeklyDown = input.color(title='Down', defval=color.new(color.red, 90), inline='CWeeklya', group='Cloud - Weekly', display=display.data_window)
+cloudWeeklyMA1 = input.int(title='Between Slot #', defval=1, minval=1, maxval=20, inline='CWeeklyb', group='Cloud - Weekly', display=display.data_window)
+cloudWeeklyMA2 = input.int(title='and #', defval=2, minval=1, maxval=20, inline='CWeeklyb', group='Cloud - Weekly', display=display.data_window)
+
+cloudMonthlyShow = input.bool(title='Show Cloud', defval=false, inline='CMonthlya', group='Cloud - Monthly', display=display.data_window)
+cloudMonthlyUp = input.color(title='Up', defval=color.new(color.green, 90), inline='CMonthlya', group='Cloud - Monthly', display=display.data_window)
+cloudMonthlyDown = input.color(title='Down', defval=color.new(color.red, 90), inline='CMonthlya', group='Cloud - Monthly', display=display.data_window)
+cloudMonthlyMA1 = input.int(title='Between Slot #', defval=1, minval=1, maxval=20, inline='CMonthlyb', group='Cloud - Monthly', display=display.data_window)
+cloudMonthlyMA2 = input.int(title='and #', defval=2, minval=1, maxval=20, inline='CMonthlyb', group='Cloud - Monthly', display=display.data_window)
+
+//***************************************************************************************
+// Calculate & plot — Native Slots
+//***************************************************************************************
+
+s1Val = f_ma(s1Src, s1Len, s1Type)
+s1Show = (timeframe.isintraday and s1Intra) or (timeframe.isdaily and s1Daily) or (timeframe.isweekly and s1Weekly) or (timeframe.ismonthly and s1Monthly)
+s1Plot = plot(s1Show ? s1Val : na, title='Slot 1', color=s1Col, linewidth=s1Width)
+
+s2Val = f_ma(s2Src, s2Len, s2Type)
+s2Show = (timeframe.isintraday and s2Intra) or (timeframe.isdaily and s2Daily) or (timeframe.isweekly and s2Weekly) or (timeframe.ismonthly and s2Monthly)
+s2Plot = plot(s2Show ? s2Val : na, title='Slot 2', color=s2Col, linewidth=s2Width)
+
+s3Val = f_ma(s3Src, s3Len, s3Type)
+s3Show = (timeframe.isintraday and s3Intra) or (timeframe.isdaily and s3Daily) or (timeframe.isweekly and s3Weekly) or (timeframe.ismonthly and s3Monthly)
+s3Plot = plot(s3Show ? s3Val : na, title='Slot 3', color=s3Col, linewidth=s3Width)
+
+s4Val = f_ma(s4Src, s4Len, s4Type)
+s4Show = (timeframe.isintraday and s4Intra) or (timeframe.isdaily and s4Daily) or (timeframe.isweekly and s4Weekly) or (timeframe.ismonthly and s4Monthly)
+s4Plot = plot(s4Show ? s4Val : na, title='Slot 4', color=s4Col, linewidth=s4Width)
+
+s5Val = f_ma(s5Src, s5Len, s5Type)
+s5Show = (timeframe.isintraday and s5Intra) or (timeframe.isdaily and s5Daily) or (timeframe.isweekly and s5Weekly) or (timeframe.ismonthly and s5Monthly)
+s5Plot = plot(s5Show ? s5Val : na, title='Slot 5', color=s5Col, linewidth=s5Width)
+
+s6Val = f_ma(s6Src, s6Len, s6Type)
+s6Show = (timeframe.isintraday and s6Intra) or (timeframe.isdaily and s6Daily) or (timeframe.isweekly and s6Weekly) or (timeframe.ismonthly and s6Monthly)
+s6Plot = plot(s6Show ? s6Val : na, title='Slot 6', color=s6Col, linewidth=s6Width)
+
+s7Val = f_ma(s7Src, s7Len, s7Type)
+s7Show = (timeframe.isintraday and s7Intra) or (timeframe.isdaily and s7Daily) or (timeframe.isweekly and s7Weekly) or (timeframe.ismonthly and s7Monthly)
+s7Plot = plot(s7Show ? s7Val : na, title='Slot 7', color=s7Col, linewidth=s7Width)
+
+s8Val = f_ma(s8Src, s8Len, s8Type)
+s8Show = (timeframe.isintraday and s8Intra) or (timeframe.isdaily and s8Daily) or (timeframe.isweekly and s8Weekly) or (timeframe.ismonthly and s8Monthly)
+s8Plot = plot(s8Show ? s8Val : na, title='Slot 8', color=s8Col, linewidth=s8Width)
+
+s9Val = f_ma(s9Src, s9Len, s9Type)
+s9Show = (timeframe.isintraday and s9Intra) or (timeframe.isdaily and s9Daily) or (timeframe.isweekly and s9Weekly) or (timeframe.ismonthly and s9Monthly)
+s9Plot = plot(s9Show ? s9Val : na, title='Slot 9', color=s9Col, linewidth=s9Width)
+
+s10Val = f_ma(s10Src, s10Len, s10Type)
+s10Show = (timeframe.isintraday and s10Intra) or (timeframe.isdaily and s10Daily) or (timeframe.isweekly and s10Weekly) or (timeframe.ismonthly and s10Monthly)
+s10Plot = plot(s10Show ? s10Val : na, title='Slot 10', color=s10Col, linewidth=s10Width)
+
+s11Val = f_ma(s11Src, s11Len, s11Type)
+s11Show = (timeframe.isintraday and s11Intra) or (timeframe.isdaily and s11Daily) or (timeframe.isweekly and s11Weekly) or (timeframe.ismonthly and s11Monthly)
+s11Plot = plot(s11Show ? s11Val : na, title='Slot 11', color=s11Col, linewidth=s11Width)
+
+s12Val = f_ma(s12Src, s12Len, s12Type)
+s12Show = (timeframe.isintraday and s12Intra) or (timeframe.isdaily and s12Daily) or (timeframe.isweekly and s12Weekly) or (timeframe.ismonthly and s12Monthly)
+s12Plot = plot(s12Show ? s12Val : na, title='Slot 12', color=s12Col, linewidth=s12Width)
+
+s13Val = f_ma(s13Src, s13Len, s13Type)
+s13Show = (timeframe.isintraday and s13Intra) or (timeframe.isdaily and s13Daily) or (timeframe.isweekly and s13Weekly) or (timeframe.ismonthly and s13Monthly)
+s13Plot = plot(s13Show ? s13Val : na, title='Slot 13', color=s13Col, linewidth=s13Width)
+
+s14Val = f_ma(s14Src, s14Len, s14Type)
+s14Show = (timeframe.isintraday and s14Intra) or (timeframe.isdaily and s14Daily) or (timeframe.isweekly and s14Weekly) or (timeframe.ismonthly and s14Monthly)
+s14Plot = plot(s14Show ? s14Val : na, title='Slot 14', color=s14Col, linewidth=s14Width)
+
+s15Val = f_ma(s15Src, s15Len, s15Type)
+s15Show = (timeframe.isintraday and s15Intra) or (timeframe.isdaily and s15Daily) or (timeframe.isweekly and s15Weekly) or (timeframe.ismonthly and s15Monthly)
+s15Plot = plot(s15Show ? s15Val : na, title='Slot 15', color=s15Col, linewidth=s15Width)
+
+s16Val = f_ma(s16Src, s16Len, s16Type)
+s16Show = (timeframe.isintraday and s16Intra) or (timeframe.isdaily and s16Daily) or (timeframe.isweekly and s16Weekly) or (timeframe.ismonthly and s16Monthly)
+s16Plot = plot(s16Show ? s16Val : na, title='Slot 16', color=s16Col, linewidth=s16Width)
+
+s17Val = f_ma(s17Src, s17Len, s17Type)
+s17Show = (timeframe.isintraday and s17Intra) or (timeframe.isdaily and s17Daily) or (timeframe.isweekly and s17Weekly) or (timeframe.ismonthly and s17Monthly)
+s17Plot = plot(s17Show ? s17Val : na, title='Slot 17', color=s17Col, linewidth=s17Width)
+
+s18Val = f_ma(s18Src, s18Len, s18Type)
+s18Show = (timeframe.isintraday and s18Intra) or (timeframe.isdaily and s18Daily) or (timeframe.isweekly and s18Weekly) or (timeframe.ismonthly and s18Monthly)
+s18Plot = plot(s18Show ? s18Val : na, title='Slot 18', color=s18Col, linewidth=s18Width)
+
+s19Val = f_ma(s19Src, s19Len, s19Type)
+s19Show = (timeframe.isintraday and s19Intra) or (timeframe.isdaily and s19Daily) or (timeframe.isweekly and s19Weekly) or (timeframe.ismonthly and s19Monthly)
+s19Plot = plot(s19Show ? s19Val : na, title='Slot 19', color=s19Col, linewidth=s19Width)
+
+s20Val = f_ma(s20Src, s20Len, s20Type)
+s20Show = (timeframe.isintraday and s20Intra) or (timeframe.isdaily and s20Daily) or (timeframe.isweekly and s20Weekly) or (timeframe.ismonthly and s20Monthly)
+s20Plot = plot(s20Show ? s20Val : na, title='Slot 20', color=s20Col, linewidth=s20Width)
+
+//***************************************************************************************
+// Calculate & plot — Cross-Timeframe Overlays
+//***************************************************************************************
+
+o1Val = request.security(syminfo.tickerid, o1SrcTF, f_ma(o1Src, o1Len, o1Type), lookahead=barmerge.lookahead_on)
+o1Show = (timeframe.isintraday and o1DispIntra) or (timeframe.isdaily and o1DispDaily) or (timeframe.isweekly and o1DispWeekly) or (timeframe.ismonthly and o1DispMonthly)
+plot(o1Show ? o1Val : na, title='Overlay 1', color=o1Col, linewidth=o1Width)
+
+o2Val = request.security(syminfo.tickerid, o2SrcTF, f_ma(o2Src, o2Len, o2Type), lookahead=barmerge.lookahead_on)
+o2Show = (timeframe.isintraday and o2DispIntra) or (timeframe.isdaily and o2DispDaily) or (timeframe.isweekly and o2DispWeekly) or (timeframe.ismonthly and o2DispMonthly)
+plot(o2Show ? o2Val : na, title='Overlay 2', color=o2Col, linewidth=o2Width)
+
+o3Val = request.security(syminfo.tickerid, o3SrcTF, f_ma(o3Src, o3Len, o3Type), lookahead=barmerge.lookahead_on)
+o3Show = (timeframe.isintraday and o3DispIntra) or (timeframe.isdaily and o3DispDaily) or (timeframe.isweekly and o3DispWeekly) or (timeframe.ismonthly and o3DispMonthly)
+plot(o3Show ? o3Val : na, title='Overlay 3', color=o3Col, linewidth=o3Width)
+
+o4Val = request.security(syminfo.tickerid, o4SrcTF, f_ma(o4Src, o4Len, o4Type), lookahead=barmerge.lookahead_on)
+o4Show = (timeframe.isintraday and o4DispIntra) or (timeframe.isdaily and o4DispDaily) or (timeframe.isweekly and o4DispWeekly) or (timeframe.ismonthly and o4DispMonthly)
+plot(o4Show ? o4Val : na, title='Overlay 4', color=o4Col, linewidth=o4Width)
+
+o5Val = request.security(syminfo.tickerid, o5SrcTF, f_ma(o5Src, o5Len, o5Type), lookahead=barmerge.lookahead_on)
+o5Show = (timeframe.isintraday and o5DispIntra) or (timeframe.isdaily and o5DispDaily) or (timeframe.isweekly and o5DispWeekly) or (timeframe.ismonthly and o5DispMonthly)
+plot(o5Show ? o5Val : na, title='Overlay 5', color=o5Col, linewidth=o5Width)
+
+//***************************************************************************************
+// Calculate & plot — VWAP
+//***************************************************************************************
+
+vwapVal = ta.vwap(vwapSrc)
+plot(vwapShow and timeframe.isintraday ? vwapVal : na, title='VWAP', color=vwapCol, linewidth=vwapWidth)
+
+//***************************************************************************************
+// Calculate & plot — Clouds
+// Each cloud only ever matters while viewing its own class's chart (a chart is
+// always exactly one class), so it's gated to that class and validated against
+// that class's own checkboxes for the two chosen slots.
+//***************************************************************************************
+
+// Intraday cloud
+cloudIntradayValA = f_pick(cloudIntradayMA1, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudIntradayValB = f_pick(cloudIntradayMA2, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudIntradayValidA = f_pickBool(cloudIntradayMA1, s1Intra, s2Intra, s3Intra, s4Intra, s5Intra, s6Intra, s7Intra, s8Intra, s9Intra, s10Intra, s11Intra, s12Intra, s13Intra, s14Intra, s15Intra, s16Intra, s17Intra, s18Intra, s19Intra, s20Intra)
+cloudIntradayValidB = f_pickBool(cloudIntradayMA2, s1Intra, s2Intra, s3Intra, s4Intra, s5Intra, s6Intra, s7Intra, s8Intra, s9Intra, s10Intra, s11Intra, s12Intra, s13Intra, s14Intra, s15Intra, s16Intra, s17Intra, s18Intra, s19Intra, s20Intra)
+cloudIntradayValid = cloudIntradayValidA and cloudIntradayValidB
+cloudIntradayActive = cloudIntradayShow and cloudIntradayValid and timeframe.isintraday
+cloudIntradayFillColor = color.rgb(0, 0, 0, 100)
+if cloudIntradayActive
+    cloudIntradayFillColor := cloudIntradayValA < cloudIntradayValB ? cloudIntradayDown : cloudIntradayUp
+cloudIntradayPlotA = plot(cloudIntradayActive ? cloudIntradayValA : na, title='Intraday Cloud Boundary A', display=display.none)
+cloudIntradayPlotB = plot(cloudIntradayActive ? cloudIntradayValB : na, title='Intraday Cloud Boundary B', display=display.none)
+fill(cloudIntradayPlotA, cloudIntradayPlotB, color=cloudIntradayFillColor)
+cloudIntradayInvalid = cloudIntradayShow and timeframe.isintraday and not cloudIntradayValid
+
+// Daily cloud
+cloudDailyValA = f_pick(cloudDailyMA1, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudDailyValB = f_pick(cloudDailyMA2, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudDailyValidA = f_pickBool(cloudDailyMA1, s1Daily, s2Daily, s3Daily, s4Daily, s5Daily, s6Daily, s7Daily, s8Daily, s9Daily, s10Daily, s11Daily, s12Daily, s13Daily, s14Daily, s15Daily, s16Daily, s17Daily, s18Daily, s19Daily, s20Daily)
+cloudDailyValidB = f_pickBool(cloudDailyMA2, s1Daily, s2Daily, s3Daily, s4Daily, s5Daily, s6Daily, s7Daily, s8Daily, s9Daily, s10Daily, s11Daily, s12Daily, s13Daily, s14Daily, s15Daily, s16Daily, s17Daily, s18Daily, s19Daily, s20Daily)
+cloudDailyValid = cloudDailyValidA and cloudDailyValidB
+cloudDailyActive = cloudDailyShow and cloudDailyValid and timeframe.isdaily
+cloudDailyFillColor = color.rgb(0, 0, 0, 100)
+if cloudDailyActive
+    cloudDailyFillColor := cloudDailyValA < cloudDailyValB ? cloudDailyDown : cloudDailyUp
+cloudDailyPlotA = plot(cloudDailyActive ? cloudDailyValA : na, title='Daily Cloud Boundary A', display=display.none)
+cloudDailyPlotB = plot(cloudDailyActive ? cloudDailyValB : na, title='Daily Cloud Boundary B', display=display.none)
+fill(cloudDailyPlotA, cloudDailyPlotB, color=cloudDailyFillColor)
+cloudDailyInvalid = cloudDailyShow and timeframe.isdaily and not cloudDailyValid
+
+// Weekly cloud
+cloudWeeklyValA = f_pick(cloudWeeklyMA1, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudWeeklyValB = f_pick(cloudWeeklyMA2, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudWeeklyValidA = f_pickBool(cloudWeeklyMA1, s1Weekly, s2Weekly, s3Weekly, s4Weekly, s5Weekly, s6Weekly, s7Weekly, s8Weekly, s9Weekly, s10Weekly, s11Weekly, s12Weekly, s13Weekly, s14Weekly, s15Weekly, s16Weekly, s17Weekly, s18Weekly, s19Weekly, s20Weekly)
+cloudWeeklyValidB = f_pickBool(cloudWeeklyMA2, s1Weekly, s2Weekly, s3Weekly, s4Weekly, s5Weekly, s6Weekly, s7Weekly, s8Weekly, s9Weekly, s10Weekly, s11Weekly, s12Weekly, s13Weekly, s14Weekly, s15Weekly, s16Weekly, s17Weekly, s18Weekly, s19Weekly, s20Weekly)
+cloudWeeklyValid = cloudWeeklyValidA and cloudWeeklyValidB
+cloudWeeklyActive = cloudWeeklyShow and cloudWeeklyValid and timeframe.isweekly
+cloudWeeklyFillColor = color.rgb(0, 0, 0, 100)
+if cloudWeeklyActive
+    cloudWeeklyFillColor := cloudWeeklyValA < cloudWeeklyValB ? cloudWeeklyDown : cloudWeeklyUp
+cloudWeeklyPlotA = plot(cloudWeeklyActive ? cloudWeeklyValA : na, title='Weekly Cloud Boundary A', display=display.none)
+cloudWeeklyPlotB = plot(cloudWeeklyActive ? cloudWeeklyValB : na, title='Weekly Cloud Boundary B', display=display.none)
+fill(cloudWeeklyPlotA, cloudWeeklyPlotB, color=cloudWeeklyFillColor)
+cloudWeeklyInvalid = cloudWeeklyShow and timeframe.isweekly and not cloudWeeklyValid
+
+// Monthly cloud
+cloudMonthlyValA = f_pick(cloudMonthlyMA1, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudMonthlyValB = f_pick(cloudMonthlyMA2, s1Val, s2Val, s3Val, s4Val, s5Val, s6Val, s7Val, s8Val, s9Val, s10Val, s11Val, s12Val, s13Val, s14Val, s15Val, s16Val, s17Val, s18Val, s19Val, s20Val)
+cloudMonthlyValidA = f_pickBool(cloudMonthlyMA1, s1Monthly, s2Monthly, s3Monthly, s4Monthly, s5Monthly, s6Monthly, s7Monthly, s8Monthly, s9Monthly, s10Monthly, s11Monthly, s12Monthly, s13Monthly, s14Monthly, s15Monthly, s16Monthly, s17Monthly, s18Monthly, s19Monthly, s20Monthly)
+cloudMonthlyValidB = f_pickBool(cloudMonthlyMA2, s1Monthly, s2Monthly, s3Monthly, s4Monthly, s5Monthly, s6Monthly, s7Monthly, s8Monthly, s9Monthly, s10Monthly, s11Monthly, s12Monthly, s13Monthly, s14Monthly, s15Monthly, s16Monthly, s17Monthly, s18Monthly, s19Monthly, s20Monthly)
+cloudMonthlyValid = cloudMonthlyValidA and cloudMonthlyValidB
+cloudMonthlyActive = cloudMonthlyShow and cloudMonthlyValid and timeframe.ismonthly
+cloudMonthlyFillColor = color.rgb(0, 0, 0, 100)
+if cloudMonthlyActive
+    cloudMonthlyFillColor := cloudMonthlyValA < cloudMonthlyValB ? cloudMonthlyDown : cloudMonthlyUp
+cloudMonthlyPlotA = plot(cloudMonthlyActive ? cloudMonthlyValA : na, title='Monthly Cloud Boundary A', display=display.none)
+cloudMonthlyPlotB = plot(cloudMonthlyActive ? cloudMonthlyValB : na, title='Monthly Cloud Boundary B', display=display.none)
+fill(cloudMonthlyPlotA, cloudMonthlyPlotB, color=cloudMonthlyFillColor)
+cloudMonthlyInvalid = cloudMonthlyShow and timeframe.ismonthly and not cloudMonthlyValid
+
+//***************************************************************************************
+// Validation warning — tells you when a cloud can't draw because one or both
+// of its chosen slots aren't enabled for the timeframe you're viewing.
+//***************************************************************************************
+
+warnMsg = cloudIntradayInvalid ? "Intraday Cloud: one or both selected slots aren't enabled for Intraday" : cloudDailyInvalid ? "Daily Cloud: one or both selected slots aren't enabled for Daily" : cloudWeeklyInvalid ? "Weekly Cloud: one or both selected slots aren't enabled for Weekly" : cloudMonthlyInvalid ? "Monthly Cloud: one or both selected slots aren't enabled for Monthly" : ""
+
+var label warnLbl = na
+if barstate.islast
+    label.delete(warnLbl)
+    if warnMsg != ""
+        warnLbl := label.new(bar_index, high, warnMsg, style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=size.small)
+    else
+        warnLbl := na
