@@ -12,7 +12,7 @@
 // Release: v1
 
 //@version=6
-indicator(title='MA Slots — Multi-Timeframe', shorttitle='MA Slots', overlay=true)
+indicator(title='MA Slots - Multi-Timeframe', shorttitle='MA Slots', overlay=true)
 
 //***************************************************************************************
 // Helper functions
