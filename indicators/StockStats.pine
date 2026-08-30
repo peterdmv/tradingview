@@ -3,7 +3,6 @@
 //
 // Thanks to ArmerSchlucker for the original version of this table indicator.
 // Thanks to Qullamaggie / MikeC / TheScrutiniser and GlinckEastwoot for ADR% formula
-// Thanks to Stockbee for the TI65 indicator: https://stockbee.blogspot.com/2018/03/how-to-setup-trend-intensity-scans-and.html
 //
 // Release: v2 — uplifted to Pine v6 and refactored (button-style stat row).
 
@@ -54,7 +53,6 @@ show_float = input(false, title='Show Shares Float')
 show_adr = input(true, title="Show ADR%")
 show_atr = input(false, title="Show ATR")
 show_lod_dist = input(false, title="Show LoD dist.")
-show_ti = input(false, title="Show Trend Intensity 65 Days")
 show_52wk_high = input(false, title="Show 52-Week High")
 show_vol_buzz = input(true, title="Show Volume Buzz")
 show_run_rate = input(true, title="Show Run Rate",
@@ -77,7 +75,6 @@ mkt_cap_col = input(color.gray, title="Text Color (Mkt Cap)")
 float_col = input(color.gray, title="Text Color (Float)")
 adr_col = input(color.gray, title="Text Color (ADR%)")
 atr_col = input(color.gray, title="Text Color (ATR)")
-ti_col = input(color.gray, title="Text Color (TI65)")
 lod_dist_col = input(color.gray, title="Text Color (LoD dist.)")
 high_52wk_col = input(color.gray, title="Text Color (52-Week High)")
 vol_buzz_col = input(color.gray, title="Text Color (Volume Buzz)")
@@ -100,8 +97,6 @@ atr_daily = request.security(syminfo.tickerid, 'D', ta.atr(atr_len))
 atr_weekly = request.security(syminfo.tickerid, 'W', ta.atr(atr_len))
 atr = timeframe.isweekly ? atr_weekly : atr_daily
 lod_dist = request.security(syminfo.tickerid, 'D', 100 * (close - low) / atr)
-ti65e = 100 * ta.sma(close, 7) / ta.sma(close, 65)
-ti65s = request.security(syminfo.tickerid, 'D', ti65e)
 high_52wk = request.security(syminfo.tickerid, 'W', ta.highest(high, 52))
 vol_buzze = (volume / ta.sma(volume, 100) - 1) * 100
 vol_buzzs = request.security(syminfo.tickerid, 'D', vol_buzze)
@@ -195,7 +190,7 @@ run_rate_pct = syminfo.type == "crypto" ? crypto_run_rate_pct : equity_run_rate_
 // both sharing the table's background so the pair reads as one chip. Chips are
 // packed left-to-right across a single row, skipping any stats toggled off.
 n_cols = (show_mkt_cap ? 1 : 0) + (show_float ? 1 : 0) + (show_adr ? 1 : 0) +
-  (show_atr ? 1 : 0) + (show_lod_dist ? 1 : 0) + (show_ti ? 1 : 0) +
+  (show_atr ? 1 : 0) + (show_lod_dist ? 1 : 0) +
   (show_52wk_high ? 1 : 0) + (show_vol_buzz ? 1 : 0) + (show_run_rate ? 1 : 0)
 
 row_label = show_empty_row ? 1 : 0
@@ -226,9 +221,6 @@ if barstate.islast and timeframe.period != "W" and timeframe.period != "M"
         col += 1
     if show_lod_dist
         f_chip(col, "LoDD", f_num_percent(lod_dist), lod_dist_col)
-        col += 1
-    if show_ti
-        f_chip(col, "TI65", f_num_percent(ti65s), ti_col)
         col += 1
     if show_52wk_high
         f_chip(col, "52W High", f_num(high_52wk), high_52wk_col)
